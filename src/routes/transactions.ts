@@ -5,8 +5,20 @@ import { z } from 'zod'
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
-    app.get('/', async () => {
-        const transactions = await knex('transactions').select('*')
+    app.get('/', async (request, reply) => {
+        const sessionId = request.cookies.sessionId
+
+        if (!sessionId) {
+            return reply.status(401).send({
+                error: 'Unauthorized'
+            })
+        }
+
+        console.log(sessionId)
+
+        const transactions = await knex('transactions')
+            .where('session_id', sessionId)
+            .select()
 
         return { transactions }
     })
@@ -22,7 +34,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
     })
 
     app.get('/summary', async () => {
-        const summary = await knex('transactions').sum('amount', { as: 'amount'}).first()
+        const summary = await knex('transactions').sum('amount', { as: 'amount' }).first()
         return { summary }
     })
 
@@ -52,6 +64,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
                 id: randomUUID(),
                 title,
                 amount: type === 'credit' ? amount : amount * -1,
+                session_id: sessionId
             })
 
         return reply.status(201).send()
