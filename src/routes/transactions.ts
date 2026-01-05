@@ -2,19 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { knex } from '../database';
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
+import { checkSessionIdExists } from '../middlewares/check-session-id-exists';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
-    app.get('/', async (request, reply) => {
-        const sessionId = request.cookies.sessionId
-
-        if (!sessionId) {
-            return reply.status(401).send({
-                error: 'Unauthorized'
-            })
-        }
-
-        console.log(sessionId)
+    app.get('/', {
+        preHandler: [checkSessionIdExists]
+    }, async (request, reply) => {
+        const { sessionId } = request.cookies
 
         const transactions = await knex('transactions')
             .where('session_id', sessionId)
@@ -23,18 +18,31 @@ export async function transactionsRoutes(app: FastifyInstance) {
         return { transactions }
     })
 
-    app.get('/:id', async (request) => {
+    app.get('/:id', {
+        preHandler: [checkSessionIdExists]
+    }, async (request) => {
         const getTransactionParamsSchema = z.object({
             id: z.string().uuid(),
         })
 
+        const { sessionId } = request.cookies
+
         const { id } = getTransactionParamsSchema.parse(request.params)
-        const transaction = await knex('transactions').where('id', id).first()
+        const transaction = await knex('transactions')
+            .where('id', id)
+            .andWhere('session_id', sessionId)
+            .first()
         return { transaction }
     })
 
-    app.get('/summary', async () => {
-        const summary = await knex('transactions').sum('amount', { as: 'amount' }).first()
+    app.get('/summary', {
+        preHandler: [checkSessionIdExists]
+    }, async (request) => {
+        const { sessionId } = request.cookies
+        const summary = await knex('transactions')
+            .where('session_id', sessionId)
+            .sum('amount', { as: 'amount' })
+            .first()
         return { summary }
     })
 
